@@ -12,7 +12,7 @@
     <div class="container py-5">
       <div class="row top-buffer">
         <div class="col-sm-6">
-          <div id="instruction-text" class="text-center">
+          <div id="instruction-text" style="display: none;" class="text-center">
             <h4>Instruction:<br>{{ instruction_text }}</h4>
           </div>
         </div>
@@ -74,13 +74,6 @@
               </form>
             </div>
             {% endif %}
-          </div>
-        </div>
-        <div class="col-sm-2">
-          <div class="row top-buffer">
-            <form method="post" action="{{url_for('done', session_id=session_id, asin=asin, options=options )}}">
-              <button type="submit" class="btn btn-lg purchase">Buy Now</button>
-            </form>
           </div>
         </div>
       </div>

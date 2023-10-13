@@ -1,0 +1,71 @@
+/* Global styling for all elements */
+* {
+    -webkit-border-radius: 1px !important;
+    -moz-border-radius: 1px !important;
+    border-radius: 1px !important;
+    font-family: Arial, Helvetica;
+}
+
+body {
+    background: white;
+    min-height: 100vh;
+    font-size: 12px; /* Reduce base font size */
+}
+
+#logo, #thankyou {
+    width: 100%;
+    font-size: 24px; /* Reduce the font size for small screens */
+    letter-spacing: normal;
+    padding-bottom: 10px; /* Halve padding */
+}
+
+#logo h1 {
+    font-size: 32px; /* Further reduced for small screens */
+}
+
+#form-buscar > .form-group > .input-group > .form-control, 
+#form-buscar > .form-group > .input-group > .input-group-btn > .btn {
+    height: 30px; /* Reduce height for input and button */
+    font-size: 14px; /* Reduce font size */
+}
+
+#form-buscar > .form-group > .input-group > .input-group-btn > .btn .glyphicon {
+    margin-right: 6px; /* Reduce margin for icon */
+}
+
+.result-img, .item-page-img {
+    max-height: 150px; /* Limit image height for visibility */
+    max-width: 150px;
+    overflow: hidden;
+}
+
+.top-buffer { margin-top: 5px; } /* Reduce margin */
+
+.product-info { font-size: 14px; } /* Adjust font size */
+
+.star-active, .star-inactive { margin-top: 5px; margin-bottom: 5px; } /* Adjust margin */
+
+.btn-primary, .btn-success {
+    font-size: 11px; /* Adjust button font size */
+    border-radius: 20px; /* Adjust border radius for small screens */
+}
+
+.radio-toolbar {
+    margin: 3px; /* Reduce margin for radio buttons */
+}
+
+.radio-toolbar label {
+    padding: 5px 5px; /* Reduce padding for labels */
+    font-size: 12px; /* Adjust font size */
+}
+
+#instruction-text {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    padding: 3px; /* Reduce padding */
+}
+
+/* Add Media Query for specifically targeting small screens */
+@media only screen and (max-width: 448px) {
+    /* Additional styles or overrides for small screens go here */
+}
