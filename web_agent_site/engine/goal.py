@@ -267,3 +267,12 @@ def get_reward(purchased_product, goal, price, options, **kwargs):
             info['w_price'] = 1 / (len(goal['attributes']) + len(goal['goal_options']) + 1)
         return total_reward, info
     return total_reward
+
+
+def get_top_product_matches(product, product_prices, goal):
+    for i, p in enumerate(product):
+        p["index"] = i
+    product_rewards = [(p, get_reward(p, goal, product_prices[p["asin"]], {f"{key}-{value}": value for key in p["options"] for value in p["options"][key]})) for p in product]
+    product_rewards.sort(key=lambda x: x[1])
+    max_reward = max(product_rewards, key=lambda p: p[1])
+    return [p[0] for p in product_rewards if p[1] == max_reward[1]]

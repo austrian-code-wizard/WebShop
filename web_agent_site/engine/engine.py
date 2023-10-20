@@ -17,6 +17,7 @@ from pyserini.search.lucene import LuceneSearcher
 
 from web_agent_site.utils import (
     BASE_DIR,
+    DEBUG_PROD_SIZE,
     DEFAULT_FILE_PATH,
     DEFAULT_REVIEW_PATH,
     DEFAULT_ATTR_PATH,
@@ -25,9 +26,10 @@ from web_agent_site.utils import (
 
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
-SEARCH_RETURN_N = 50
-PRODUCT_WINDOW = 10
+SEARCH_RETURN_N = 12
+PRODUCT_WINDOW = 5
 TOP_K_ATTR = 10
+DEFAULT_PRICE = 100.0
 
 END_BUTTON = 'Buy Now'
 NEXT_PAGE = 'Next >'
@@ -49,6 +51,10 @@ def map_action_to_html(action, **kwargs):
             read_html_template(path=path),
             session_id=kwargs['session_id'],
             instruction_text=kwargs['instruction_text'],
+            best_products=json.dumps([{
+                "index": p['index'],
+                "name": p['name']
+            } for p in kwargs['best_products']])
         )
     elif action_name == 'search':
         path = os.path.join(TEMPLATE_DIR, 'results_page.html')
@@ -59,7 +65,7 @@ def map_action_to_html(action, **kwargs):
             keywords=kwargs['keywords'],
             page=kwargs['page'],
             total=kwargs['total'],
-            instruction_text=kwargs['instruction_text'],
+            instruction_text=kwargs['instruction_text']
         )
     elif action_name == 'click' and action_arg == END_BUTTON:
         path = os.path.join(TEMPLATE_DIR, 'done_page.html')
@@ -151,6 +157,8 @@ def get_top_n_product_from_keywords(
         all_products,
         product_item_dict,
         attribute_to_asins=None,
+        n_random: int = None,
+        shuffle: bool = False
     ):
     if keywords[0] == '<r>':
         top_n_products = random.sample(all_products, k=SEARCH_RETURN_N)
@@ -170,6 +178,14 @@ def get_top_n_product_from_keywords(
         docs = [search_engine.doc(hit.docid) for hit in hits]
         top_n_asins = [json.loads(doc.raw())['id'] for doc in docs]
         top_n_products = [product_item_dict[asin] for asin in top_n_asins if asin in product_item_dict]
+
+    # Add ability to add non-relevant items
+    if n_random:
+        top_n_products += random.sample(all_products, k=n_random)
+
+    # Add ability to shuffle items
+    if shuffle:
+        random.shuffle(top_n_products)
     return top_n_products
 
 
@@ -229,8 +245,9 @@ def clean_product_keys(products):
 
 def load_products(filepath, num_products=None, human_goals=True):
     # TODO: move to preprocessing step -> enforce single source of truth
+    print("Loading products")
     with open(filepath) as f:
-        products = json.load(f)
+        products = json.load(f)[:DEBUG_PROD_SIZE] if DEBUG_PROD_SIZE else json.load(f)
     print('Products loaded.')
     products = clean_product_keys(products)
     
@@ -286,9 +303,9 @@ def load_products(filepath, num_products=None, human_goals=True):
             if isinstance(p['small_description'], list) else [p['small_description']]
 
         pricing = p.get('pricing')
-        if pricing is None or not pricing:
-            pricing = [100.0]
-            price_tag = '$100.0'
+        if pricing is None or not pricing or len(pricing) == 0:
+            pricing = [DEFAULT_PRICE]
+            price_tag = f'${DEFAULT_PRICE}'
         else:
             pricing = [
                 float(Decimal(re.sub(r'[^\d.]', '', price)))

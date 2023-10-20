@@ -15,7 +15,10 @@
             <h2>WebShop</h2>
           </div>
           <div id="instruction-text" style="display: none;" class="text-center">
-            <h4>Instruction: <br>{{ instruction_text }}</h4>
+            <h4>{{ instruction_text }}</h4>
+          </div>
+          <div id="best-products" style="display: none;" class="text-center">
+            <h4>{{ best_products }}</h4>
           </div>
           <form role="form" id="form-buscar" method="post" action="{{url_for('index', session_id=session_id)}}">
             <div class="form-group">

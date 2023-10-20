@@ -3,6 +3,7 @@ import random
 import requests
 import string
 import time
+import json
 from io import BytesIO
 
 import numpy as np
@@ -15,13 +16,13 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import ElementNotInteractableException
 from web_agent_site.engine.engine import parse_action, END_BUTTON
 
-SCREEN_SIZE_MULTIPLIER = 3
 
 class WebAgentDreamEnv(gym.Env):
     """Gym environment for HTML mode of WebShop environment"""
 
-    WINDOW_SIZE: int = 224
-    DEFAULT_SCROLL_AMOUNT: int = 56 * SCREEN_SIZE_MULTIPLIER
+    WINDOW_HEIGHT: int = 540
+    WINDOW_WIDTH: int = 960
+    DEFAULT_SCROLL_AMOUNT: int = 180
     DEFAULT_SCROLL_TIME: int = 150
 
     def __init__(self, observation_mode='html', **kwargs):
@@ -42,7 +43,7 @@ class WebAgentDreamEnv(gym.Env):
 
         # Create a browser driver to simulate the WebShop site
         options = webdriver.ChromeOptions()
-        options.add_argument(f"window-size={self.WINDOW_SIZE * SCREEN_SIZE_MULTIPLIER},{self.WINDOW_SIZE * SCREEN_SIZE_MULTIPLIER}")
+        options.add_argument(f"window-size={self.WINDOW_WIDTH},{self.WINDOW_HEIGHT}")
         options.add_argument('--force-device-scale-factor=1')
         if 'render' not in kwargs or not kwargs['render']:
             options.add_argument("headless")
@@ -129,8 +130,8 @@ class WebAgentDreamEnv(gym.Env):
         """Use the scroll wheel to scroll at coordinates (left, top)."""
         chain = ActionChains(self.browser)
         chain.w3c_actions.wheel_action.scroll(
-            x=int(self.WINDOW_SIZE // 2),
-            y=int(self.WINDOW_SIZE // 2),
+            x=int(self.WINDOW_WIDTH // 2),
+            y=int(self.WINDOW_HEIGHT // 2),
             delta_y=-self.DEFAULT_SCROLL_AMOUNT if scroll_up else self.DEFAULT_SCROLL_AMOUNT,
             duration=self.DEFAULT_SCROLL_TIME,
         )
@@ -184,12 +185,18 @@ class WebAgentDreamEnv(gym.Env):
         instruction_text = html_obj.find(id='instruction-text').h4.text
         return instruction_text
     
+    def get_best_products(self):
+        """Get corresponding instruction text for environment current step"""
+        html_obj = self._parse_html(self.browser.page_source)
+        best_products_element = html_obj.find(id='best-products')
+        best_products = json.loads(best_products_element.h4.text)
+        return best_products
+    
     def convert_html_to_text(self, html):
         """Strip HTML of tags and add separators to convert observation into simple mode"""
         texts = self._parse_html(html).findAll(text=True)
         visible_texts = filter(tag_visible, texts)
-        observation = ' [SEP] '.join(t.strip() for t in visible_texts if t != '\n')
-        return observation
+        return visible_texts
     
 
     @property
@@ -214,7 +221,9 @@ class WebAgentDreamEnv(gym.Env):
             text = self.convert_html_to_text(self.browser.page_source),
             instruction_text=self.instruction_text,
             screenshot=self.screenshot,
-            metadata=self.browser_metadata
+            metadata=self.browser_metadata,
+            best_products=self.best_products,
+            click_actions = [a.text for a in self.get_available_click_actions()]
         )
 
     @property
@@ -236,6 +245,7 @@ class WebAgentDreamEnv(gym.Env):
         self.browser.get(init_url)
 
         self.instruction_text = self.get_instruction_text()
+        self.best_products = self.get_best_products()
 
         return self.state, None
 
@@ -266,7 +276,6 @@ class WebAgentDreamEnv(gym.Env):
         """
         png_data = self.browser.get_screenshot_as_png()
         pil_image = Image.open(BytesIO(png_data)).convert("RGB")
-        pil_image = pil_image.resize((self.WINDOW_SIZE, self.WINDOW_SIZE))
         icc_profile = pil_image.info.get("icc_profile")
         if icc_profile:
             orig_icc = ImageCms.ImageCmsProfile(BytesIO(icc_profile))
@@ -278,5 +287,5 @@ def tag_visible(element):
     """Helper method to strip HTML block of extraneous tags"""
     ignore = {'style', 'script', 'head', 'title', 'meta', '[document]'}
     return (
-        element.parent.name not in ignore and not isinstance(element, Comment)
+        element.parent.name not in ignore and str(element.parent.parent.get("style")) != "display: none;" and not isinstance(element, Comment)
     )

@@ -20,7 +20,7 @@ from web_agent_site.engine.engine import (
     map_action_to_html,
     END_BUTTON
 )
-from web_agent_site.engine.goal import get_reward, get_goals
+from web_agent_site.engine.goal import get_reward, get_goals, get_top_product_matches
 from web_agent_site.utils import (
     generate_mturk_code,
     setup_logger,
@@ -37,6 +37,8 @@ product_prices = None
 attribute_to_asins = None
 goals = None
 weights = None
+
+NUM_RANDOM = 3
 
 user_sessions = dict()
 user_log_dir = None
@@ -58,10 +60,12 @@ def index(session_id):
         all_products, product_item_dict, product_prices, attribute_to_asins = \
             load_products(
                 filepath=DEFAULT_FILE_PATH,
-                num_products=DEBUG_PROD_SIZE
+                num_products=DEBUG_PROD_SIZE,
+                human_goals=False
             )
         search_engine = init_search_engine(num_products=DEBUG_PROD_SIZE)
-        goals = get_goals(all_products, product_prices)
+        goals = get_goals(all_products, product_prices, human_goals=False)
+        print(f"Num goals: {len(goals)}")
         random.seed(233)
         random.shuffle(goals)
         weights = [goal['weight'] for goal in goals]
@@ -70,17 +74,31 @@ def index(session_id):
         goal_dix = int(session_id.split('_')[-1])
         goal = goals[goal_dix]
         instruction_text = goal['instruction_text']
-        user_sessions[session_id] = {'goal': goal, 'done': False}
+        user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': {}}
         if user_log_dir is not None:
             setup_logger(session_id, user_log_dir)
     elif session_id not in user_sessions:
         goal = random.choices(goals, weights)[0]
         instruction_text = goal['instruction_text']
-        user_sessions[session_id] = {'goal': goal, 'done': False}
+        user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': {}}
         if user_log_dir is not None:
             setup_logger(session_id, user_log_dir)
     else:
         instruction_text = user_sessions[session_id]['goal']['instruction_text']
+
+    top_n_products = get_top_n_product_from_keywords(
+            instruction_text.split(),
+            search_engine,
+            all_products,
+            product_item_dict,
+            attribute_to_asins,
+            n_random=NUM_RANDOM,
+            shuffle=False
+        )
+    user_sessions[session_id]["top_n_products"][instruction_text] = top_n_products
+
+    best_products = get_top_product_matches(top_n_products, product_prices, user_sessions[session_id]["goal"])
+    
 
     if request.method == 'POST' and 'search_query' in request.form:
         keywords = request.form['search_query'].lower().split(' ')
@@ -101,6 +119,7 @@ def index(session_id):
         'start',
         session_id=session_id,
         instruction_text=instruction_text,
+        best_products=best_products
     )
 
 
@@ -112,13 +131,20 @@ def search_results(session_id, keywords, page):
     instruction_text = user_sessions[session_id]['goal']['instruction_text']
     page = convert_web_app_string_to_var('page', page)
     keywords = convert_web_app_string_to_var('keywords', keywords)
-    top_n_products = get_top_n_product_from_keywords(
-        keywords,
-        search_engine,
-        all_products,
-        product_item_dict,
-        attribute_to_asins,
-    )
+    keyword_string = " ".join(keywords)
+    if keyword_string in user_sessions[session_id]["top_n_products"]:
+        top_n_products = user_sessions[session_id]["top_n_products"][keyword_string]
+    else:
+        top_n_products = get_top_n_product_from_keywords(
+            keywords,
+            search_engine,
+            all_products,
+            product_item_dict,
+            attribute_to_asins,
+            n_random=NUM_RANDOM,
+            shuffle=True
+        )
+        user_sessions[session_id]["top_n_products"][keyword_string] = top_n_products
     products = get_product_per_page(top_n_products, page)
     html = map_action_to_html(
         'search',
@@ -127,7 +153,7 @@ def search_results(session_id, keywords, page):
         keywords=keywords,
         page=page,
         total=len(top_n_products),
-        instruction_text=instruction_text,
+        instruction_text=instruction_text
     )
     logger = logging.getLogger(session_id)
     logger.info(json.dumps(dict(
