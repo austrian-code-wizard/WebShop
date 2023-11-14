@@ -26,8 +26,8 @@ from web_agent_site.utils import (
 
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
-SEARCH_RETURN_N = 12
-PRODUCT_WINDOW = 5
+SEARCH_RETURN_N = 1
+PRODUCT_WINDOW = 3
 TOP_K_ATTR = 10
 DEFAULT_PRICE = 100.0
 

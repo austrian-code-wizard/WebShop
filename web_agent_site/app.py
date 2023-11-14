@@ -9,6 +9,9 @@ from flask import (
     url_for
 )
 
+# TODO: Not sure why this import is necessary to prevent exception transformers imports
+from torch.utils.checkpoint import checkpoint
+
 from rich import print
 
 from web_agent_site.engine.engine import (
@@ -38,7 +41,7 @@ attribute_to_asins = None
 goals = None
 weights = None
 
-NUM_RANDOM = 3
+NUM_RANDOM = 2
 
 user_sessions = dict()
 user_log_dir = None
@@ -86,16 +89,21 @@ def index(session_id):
     else:
         instruction_text = user_sessions[session_id]['goal']['instruction_text']
 
-    top_n_products = get_top_n_product_from_keywords(
+    if instruction_text in user_sessions[session_id]["top_n_products"]:
+        top_n_products = user_sessions[session_id]["top_n_products"][instruction_text]
+        random.shuffle(top_n_products)
+    else:
+        # print(f"Warning: could not find cached search results for {instruction_text}")
+        top_n_products = get_top_n_product_from_keywords(
             instruction_text.split(),
             search_engine,
             all_products,
             product_item_dict,
             attribute_to_asins,
             n_random=NUM_RANDOM,
-            shuffle=False
+            shuffle=True
         )
-    user_sessions[session_id]["top_n_products"][instruction_text] = top_n_products
+        user_sessions[session_id]["top_n_products"][instruction_text] = top_n_products
 
     best_products = get_top_product_matches(top_n_products, product_prices, user_sessions[session_id]["goal"])
     
@@ -135,6 +143,7 @@ def search_results(session_id, keywords, page):
     if keyword_string in user_sessions[session_id]["top_n_products"]:
         top_n_products = user_sessions[session_id]["top_n_products"][keyword_string]
     else:
+        print(f"Warning: could not find cached search results for {keyword_string}")
         top_n_products = get_top_n_product_from_keywords(
             keywords,
             search_engine,

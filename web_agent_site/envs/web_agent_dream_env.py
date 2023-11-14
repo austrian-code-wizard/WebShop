@@ -14,18 +14,14 @@ from PIL import Image, ImageCms
 from os.path import join, dirname, abspath
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.common.exceptions import ElementNotInteractableException
-from web_agent_site.engine.engine import parse_action, END_BUTTON
 
 
 class WebAgentDreamEnv(gym.Env):
+
+    browser = None
     """Gym environment for HTML mode of WebShop environment"""
 
-    WINDOW_HEIGHT: int = 540
-    WINDOW_WIDTH: int = 960
-    DEFAULT_SCROLL_AMOUNT: int = 180
-    DEFAULT_SCROLL_TIME: int = 150
-
-    def __init__(self, observation_mode='html', **kwargs):
+    def __init__(self, observation_mode='html', window_height: int = 540, window_width: int = 960, scroll_amount: int = 180, scroll_time: int = 150, **kwargs):
         """
         Constructor for HTML environment
 
@@ -40,29 +36,33 @@ class WebAgentDreamEnv(gym.Env):
         super().__init__()
         self.observation_mode = observation_mode
         self.kwargs = kwargs
+        self.WINDOW_HEIGHT = window_height
+        self.WINDOW_WIDTH = window_width
+        self.SCROLL_AMOUNT = scroll_amount
+        self.SCROLL_TIME = scroll_time
 
         # Create a browser driver to simulate the WebShop site
-        options = webdriver.ChromeOptions()
-        options.add_argument(f"window-size={self.WINDOW_WIDTH},{self.WINDOW_HEIGHT}")
-        options.add_argument('--force-device-scale-factor=1')
-        if 'render' not in kwargs or not kwargs['render']:
-            options.add_argument("headless")
-            options.add_argument("disable-gpu")
-            options.add_argument("no-sandbox")
-        else:
-            raise ValueError("Rendering not supported for Dream environment since it will result in invalid window sizes")
-        binary_path = join(dirname(abspath(__file__)), 'chromedriver')
-        print(f'Using Chrome binary at {binary_path}')
-        self.browser = webdriver.Chrome(executable_path=binary_path, options=options)
+        if type(self).browser is None:
+            options = webdriver.ChromeOptions()
+            options.add_argument(f"window-size={self.WINDOW_WIDTH},{self.WINDOW_HEIGHT}")
+            options.add_argument('--force-device-scale-factor=1')
+            if 'render' not in kwargs or not kwargs['render']:
+                options.add_argument("headless")
+                options.add_argument("disable-gpu")
+                options.add_argument("no-sandbox")
+            else:
+                raise ValueError("Rendering not supported for Dream environment since it will result in invalid window sizes")
+            binary_path = join(dirname(abspath(__file__)), 'chromedriver_113')
+            # options.binary_location = '/iris/u/moritzst/google-chrome'
+            type(self).browser = webdriver.Chrome(executable_path=binary_path, options=options)
 
         # Set flags and values for WebShop session
         self.text_to_clickable = None
-        self.assigned_session = kwargs.get('session')
         self.session = None
         self.click_locations = [
             ()
         ]
-        self.reset()
+        # self.reset() # TODO: this is done explicitly in training loop
 
     def step(self, action: int):
         """
@@ -80,7 +80,7 @@ class WebAgentDreamEnv(gym.Env):
 
         # Map action to executed command on the WebShop environment via the broswer driver
         clickables = self.get_available_click_actions()
-        if action == 0:
+        """if action == 0:
             self.execute_search_query_input()
         elif action == 1:
             self.execute_scroll_down()
@@ -96,7 +96,21 @@ class WebAgentDreamEnv(gym.Env):
                 button = clickables[action - 4]
                 self.browser.execute_script("arguments[0].click();", button)
         else:
-            print('Invalid action. No action performed.')
+            print('Invalid action. No action performed.')"""
+        
+        if action == 0:
+            self.execute_search_query_input()
+        elif action == 1:
+            done = True
+        elif action - 2 < len(clickables):
+            try:
+                clickables[action - 2].click()
+            except ElementNotInteractableException:
+                # Perform force click with JavaScript
+                button = clickables[action - 2]
+                self.browser.execute_script("arguments[0].click();", button)
+        else:
+            pass
 
         if 'pause' in self.kwargs:
             time.sleep(self.kwargs['pause'])
@@ -115,6 +129,7 @@ class WebAgentDreamEnv(gym.Env):
 
 
     def is_element_in_viewport(self, element):
+        return True
         return self.browser.execute_script("""
             var rect = arguments[0].getBoundingClientRect();
             return (
@@ -132,8 +147,8 @@ class WebAgentDreamEnv(gym.Env):
         chain.w3c_actions.wheel_action.scroll(
             x=int(self.WINDOW_WIDTH // 2),
             y=int(self.WINDOW_HEIGHT // 2),
-            delta_y=-self.DEFAULT_SCROLL_AMOUNT if scroll_up else self.DEFAULT_SCROLL_AMOUNT,
-            duration=self.DEFAULT_SCROLL_TIME,
+            delta_y=-self.SCROLL_AMOUNT if scroll_up else self.SCROLL_AMOUNT,
+            duration=self.SCROLL_TIME,
         )
         chain.w3c_actions.perform()
 
@@ -218,12 +233,12 @@ class WebAgentDreamEnv(gym.Env):
         """
         return dict(
             html=self.browser.page_source,
-            text = self.convert_html_to_text(self.browser.page_source),
+            # text = self.convert_html_to_text(self.browser.page_source),
             instruction_text=self.instruction_text,
-            screenshot=self.screenshot,
-            metadata=self.browser_metadata,
+            # screenshot=self.screenshot,
+            # metadata=self.browser_metadata,
             best_products=self.best_products,
-            click_actions = [a.text for a in self.get_available_click_actions()]
+            # click_actions = [a.text for a in self.get_available_click_actions()]
         )
 
     @property
@@ -235,13 +250,13 @@ class WebAgentDreamEnv(gym.Env):
     def observation_space(self):
         return NotImplementedError
 
-    def reset(self):
+    def reset(self, seed=None):
         """Create a new session and reset environment variables"""
-        if self.assigned_session is not None:
-            self.session = self.assigned_session
+        if seed is not None:
+            self.session = f"fixed_{seed}"
         else:
             self.session = ''.join(random.choices(string.ascii_lowercase, k=5))
-        init_url = f'http://127.0.0.1:3000/{self.session}'
+        init_url = f'http://172.24.68.75:3000/{self.session}'
         self.browser.get(init_url)
 
         self.instruction_text = self.get_instruction_text()

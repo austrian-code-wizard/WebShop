@@ -14,13 +14,13 @@
           <div id="logo" class="text-center">
             <h2>WebShop</h2>
           </div>
-          <div id="instruction-text" style="display: none;" class="text-center">
+          <div id="instruction-text" class="text-center">
             <h4>{{ instruction_text }}</h4>
           </div>
           <div id="best-products" style="display: none;" class="text-center">
             <h4>{{ best_products }}</h4>
           </div>
-          <form role="form" id="form-buscar" method="post" action="{{url_for('index', session_id=session_id)}}">
+          <form role="form" id="form-buscar" method="post" action="{{url_for('search_results', session_id=session_id, keywords=instruction_text, page=1)}}">
             <div class="form-group">
               <div class="input-group">
                 <input id="search_input" class="form-control" type="text" name="search_query" placeholder="Search..." required/>
