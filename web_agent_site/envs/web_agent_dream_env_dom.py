@@ -2,24 +2,15 @@ import gym
 import random
 import requests
 import string
-import time
 import re
 import json
-from io import BytesIO
 import html
 from urllib.parse import unquote, quote
 
-import numpy as np
 from bs4 import BeautifulSoup
 from bs4.element import Comment
-from PIL import Image, ImageCms
-from os.path import join, dirname, abspath
+from PIL import Image, ImageFont, ImageDraw
 from web_agent_site.app import app
-
-from web_agent_site.app import (
-    index,
-    search_results
-)
 
 SEARCH_STATE = 0
 FILLED_SEARCH_STATE = 1
@@ -50,6 +41,12 @@ class WebAgentDreamDOMEnv(gym.Env):
         self._cur_state = None
         self.page_source = None
 
+    def clean_url(self, url: str) -> str:
+        """Make a url nicely readable by adding ellipses in long segments"""
+        parts = url.split('/')
+        parts = [p[:10] + '...' + p[-10:] if len(p) > 20 else p for p in parts]
+        return '/'.join(parts)
+
     def step(self, action: int):
         """
         Takes an action, updates WebShop environment, and returns (observation, reward, done, info)
@@ -75,6 +72,7 @@ class WebAgentDreamDOMEnv(gym.Env):
         else:
             with app.test_client() as c:
                 self.page_source = c.get(urls[action - 1]).data.decode('utf-8')
+                self._cur_state = self.clean_url(urls[action - 1])
         return self.state, reward, done, info
     
     def get_available_click_actions(self):
@@ -171,6 +169,7 @@ class WebAgentDreamDOMEnv(gym.Env):
         
         with app.test_client() as c:
             self.page_source = c.get(f'/{self.session}').data.decode('utf-8')
+            self._cur_state = self.clean_url(f'/{self.session}')
 
         self.instruction_text = self.get_instruction_text()
         self.best_products = self.get_best_products()
@@ -180,30 +179,27 @@ class WebAgentDreamDOMEnv(gym.Env):
     def render(self, mode='human'):
         # TODO: Render observation in terminal or WebShop website
         
-        # Return empty PIL Image
+        # Create a white PIL image and place the self._curstate url text on it, taking account of overflow
         return self.screenshot
+
 
     def close(self):
         # TODO: When DB used instead of JSONs, tear down DB here
         pass
 
     @property
-    def screenshot(
-        self
-    ) -> Image.Image:
-        """Return a scaled and cropped screenshot taken by the Selenium instance.
+    def screenshot(self):
+        img = Image.new('RGB', (self.WINDOW_WIDTH, self.WINDOW_HEIGHT), color = (255, 255, 255))
+        fnt = ImageFont.truetype('arial.ttf', 20)
+        d = ImageDraw.Draw(img)
+        d.text((10,10), self._cur_state, font=fnt, fill=(0,0,0))
 
-        Args:
-            driver: Chrome WebDriver.
-            true_width: Width of the screenshot in the correct resolution.
-            true_height: Height of the screenshot in the correct resolution.
-            crop_width: Width to crop the image to.
-            crop_height: Height to crop the image to.
-
-        Returns:
-            A PIL Image object with width crop_width and height crop_height.
-        """
-        return Image.new('RGB', (200, 10), color = 'white')
+        # Now add page source in tiny font
+        fnt = ImageFont.truetype('arial.ttf', 10)
+        relevant_content = self.page_source.split("<body>")[1]
+        relevant_content = "\n".join(relevant_content.split("\n")[:30])
+        d.text((10,30), self.page_source.split("<body>")[1], font=fnt, fill=(0,0,0))
+        return img
 
 def tag_visible(element):
     """Helper method to strip HTML block of extraneous tags"""
