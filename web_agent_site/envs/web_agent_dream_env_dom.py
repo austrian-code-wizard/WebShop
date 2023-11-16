@@ -190,7 +190,7 @@ class WebAgentDreamDOMEnv(gym.Env):
     @property
     def screenshot(self):
         img = Image.new('RGB', (self.WINDOW_WIDTH, self.WINDOW_HEIGHT), color = (255, 255, 255))
-        fnt = ImageFont.truetype('arial.ttf', 20)
+        """fnt = ImageFont.truetype('arial.ttf', 20)
         d = ImageDraw.Draw(img)
         d.text((10,10), self._cur_state, font=fnt, fill=(0,0,0))
 
@@ -198,7 +198,7 @@ class WebAgentDreamDOMEnv(gym.Env):
         fnt = ImageFont.truetype('arial.ttf', 10)
         relevant_content = self.page_source.split("<body>")[1]
         relevant_content = "\n".join(relevant_content.split("\n")[:30])
-        d.text((10,30), self.page_source.split("<body>")[1], font=fnt, fill=(0,0,0))
+        d.text((10,30), self.page_source.split("<body>")[1], font=fnt, fill=(0,0,0))"""
         return img
 
 def tag_visible(element):
