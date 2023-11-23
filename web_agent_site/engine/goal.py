@@ -4,6 +4,7 @@ Functions for specifying goals and reward calculations.
 import itertools
 import random
 import spacy
+import json
 from collections import defaultdict
 from rich import print
 from thefuzz import fuzz
@@ -13,7 +14,10 @@ nlp = spacy.load("en_core_web_lg")
 
 PRICE_RANGE = [10.0 * i for i in range(1, 100)]
 
-def get_goals(all_products, product_prices, human_goals=True):
+def get_goals(all_products, product_prices, human_goals=True, from_path=None):
+    if from_path is not None:
+        with open(from_path, "r") as f:
+            return json.load(f)
     if human_goals:
         return get_human_goals(all_products, product_prices)
     else:

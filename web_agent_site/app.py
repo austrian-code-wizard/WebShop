@@ -29,6 +29,7 @@ from web_agent_site.utils import (
     setup_logger,
     DEFAULT_FILE_PATH,
     DEBUG_PROD_SIZE,
+    SYNTHETIC_GOAL_PATH
 )
 
 app = Flask(__name__)
@@ -41,7 +42,7 @@ attribute_to_asins = None
 goals = None
 weights = None
 
-NUM_RANDOM = 2
+NUM_RANDOM = 0
 
 user_sessions = dict()
 user_log_dir = None
@@ -67,7 +68,8 @@ def index(session_id):
                 human_goals=False
             )
         search_engine = init_search_engine(num_products=DEBUG_PROD_SIZE)
-        goals = get_goals(all_products, product_prices, human_goals=False)
+        # goals = get_goals(all_products, product_prices, human_goals=False)
+        goals = get_goals(None, None, from_path=SYNTHETIC_GOAL_PATH)
         print(f"Num goals: {len(goals)}")
         random.seed(233)
         random.shuffle(goals)
@@ -76,26 +78,23 @@ def index(session_id):
     if session_id not in user_sessions and 'fixed' in session_id:
         goal_dix = int(session_id.split('_')[-1])
         goal = goals[goal_dix]
-        instruction_text = goal['instruction_text']
         user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': {}}
         if user_log_dir is not None:
             setup_logger(session_id, user_log_dir)
     elif session_id not in user_sessions:
         goal = random.choices(goals, weights)[0]
-        instruction_text = goal['instruction_text']
         user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': {}}
         if user_log_dir is not None:
             setup_logger(session_id, user_log_dir)
-    else:
-        instruction_text = user_sessions[session_id]['goal']['instruction_text']
 
-    if instruction_text in user_sessions[session_id]["top_n_products"]:
-        top_n_products = user_sessions[session_id]["top_n_products"][instruction_text]
+    search_query = user_sessions[session_id]['goal']['llm_query']
+    if search_query in user_sessions[session_id]["top_n_products"]:
+        top_n_products = user_sessions[session_id]["top_n_products"][search_query]
         random.shuffle(top_n_products)
     else:
         # print(f"Warning: could not find cached search results for {instruction_text}")
         top_n_products = get_top_n_product_from_keywords(
-            instruction_text.split(),
+            search_query.split(),
             search_engine,
             all_products,
             product_item_dict,
@@ -103,7 +102,7 @@ def index(session_id):
             n_random=NUM_RANDOM,
             shuffle=True
         )
-        user_sessions[session_id]["top_n_products"][instruction_text] = top_n_products
+        user_sessions[session_id]["top_n_products"][search_query] = top_n_products
 
     best_products = get_top_product_matches(top_n_products, product_prices, user_sessions[session_id]["goal"])
     
@@ -126,7 +125,7 @@ def index(session_id):
     return map_action_to_html(
         'start',
         session_id=session_id,
-        instruction_text=instruction_text,
+        instruction_text=user_sessions[session_id]['goal']['instruction_text'],
         best_products=best_products
     )
 
@@ -136,16 +135,16 @@ def index(session_id):
     methods=['GET', 'POST']
 )
 def search_results(session_id, keywords, page):
-    instruction_text = user_sessions[session_id]['goal']['instruction_text']
-    page = convert_web_app_string_to_var('page', page)
+    """page = convert_web_app_string_to_var('page', page)
     keywords = convert_web_app_string_to_var('keywords', keywords)
-    keyword_string = " ".join(keywords)
+    keyword_string = " ".join(keywords)"""
+    keyword_string = user_sessions[session_id]['goal']['llm_query']
     if keyword_string in user_sessions[session_id]["top_n_products"]:
         top_n_products = user_sessions[session_id]["top_n_products"][keyword_string]
     else:
         print(f"Warning: could not find cached search results for {keyword_string}")
         top_n_products = get_top_n_product_from_keywords(
-            keywords,
+            keyword_string.split(),
             search_engine,
             all_products,
             product_item_dict,
@@ -162,7 +161,7 @@ def search_results(session_id, keywords, page):
         keywords=keywords,
         page=page,
         total=len(top_n_products),
-        instruction_text=instruction_text
+        instruction_text=user_sessions[session_id]['goal']['instruction_text']
     )
     logger = logging.getLogger(session_id)
     logger.info(json.dumps(dict(

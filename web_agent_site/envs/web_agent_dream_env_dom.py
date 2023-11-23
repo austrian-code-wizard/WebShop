@@ -7,9 +7,11 @@ import json
 import html
 from urllib.parse import unquote, quote
 
+import gymnasium as gym
 from bs4 import BeautifulSoup
 from bs4.element import Comment
 from PIL import Image, ImageFont, ImageDraw
+from string import ascii_letters, digits, punctuation
 from web_agent_site.app import app
 
 SEARCH_STATE = 0
@@ -41,6 +43,8 @@ class WebAgentDreamDOMEnv(gym.Env):
         self._cur_state = None
         self.page_source = None
 
+        self.observation_space = gym.spaces.Text(min_length=0, max_length=100000, charset=ascii_letters + digits + punctuation)
+
     def clean_url(self, url: str) -> str:
         """Make a url nicely readable by adding ellipses in long segments"""
         parts = url.split('/')
@@ -64,15 +68,12 @@ class WebAgentDreamDOMEnv(gym.Env):
         # Map action to executed command on the WebShop environment via the broswer driver
         urls = self.get_available_click_actions()
         
-        if action == 0:
-            # done = True
-            pass
-        elif action > len(urls):
+        if action >= len(urls):
             pass
         else:
             with app.test_client() as c:
-                self.page_source = c.get(urls[action - 1]).data.decode('utf-8')
-                self._cur_state = self.clean_url(urls[action - 1])
+                self.page_source = c.get(urls[action]).data.decode('utf-8')
+                self._cur_state = self.clean_url(urls[action])
         return self.state, reward, done, info
     
     def get_available_click_actions(self):
@@ -151,15 +152,6 @@ class WebAgentDreamDOMEnv(gym.Env):
             # click_actions = [a.text for a in self.get_available_click_actions()]
         )
 
-    @property
-    def action_space(self):
-        # Recommended to use `get_available_actions` instead
-        return NotImplementedError
-
-    @property
-    def observation_space(self):
-        return NotImplementedError
-
     def reset(self, seed=None):
         """Create a new session and reset environment variables"""
         if seed is not None:
@@ -190,10 +182,10 @@ class WebAgentDreamDOMEnv(gym.Env):
     @property
     def screenshot(self):
         img = Image.new('RGB', (self.WINDOW_WIDTH, self.WINDOW_HEIGHT), color = (255, 255, 255))
-        """fnt = ImageFont.truetype('arial.ttf', 20)
+        fnt = ImageFont.truetype('arial.ttf', 12)
         d = ImageDraw.Draw(img)
         d.text((10,10), self._cur_state, font=fnt, fill=(0,0,0))
-
+        """
         # Now add page source in tiny font
         fnt = ImageFont.truetype('arial.ttf', 10)
         relevant_content = self.page_source.split("<body>")[1]

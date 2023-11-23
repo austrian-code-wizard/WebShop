@@ -52,7 +52,7 @@ class WebAgentDreamEnv(gym.Env):
                 options.add_argument("no-sandbox")
             else:
                 raise ValueError("Rendering not supported for Dream environment since it will result in invalid window sizes")
-            binary_path = join(dirname(abspath(__file__)), 'chromedriver_113')
+            binary_path = join(dirname(abspath(__file__)), 'chromedriver')
             # options.binary_location = '/iris/u/moritzst/google-chrome'
             type(self).browser = webdriver.Chrome(executable_path=binary_path, options=options)
 

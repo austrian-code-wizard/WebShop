@@ -26,7 +26,7 @@ from web_agent_site.utils import (
 
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
-SEARCH_RETURN_N = 1
+SEARCH_RETURN_N = 6
 PRODUCT_WINDOW = 3
 TOP_K_ATTR = 10
 DEFAULT_PRICE = 100.0
@@ -247,7 +247,7 @@ def load_products(filepath, num_products=None, human_goals=True):
     # TODO: move to preprocessing step -> enforce single source of truth
     print("Loading products")
     with open(filepath) as f:
-        products = json.load(f)[:DEBUG_PROD_SIZE] if DEBUG_PROD_SIZE else json.load(f)
+        products = json.load(f)
     print('Products loaded.')
     products = clean_product_keys(products)
     
