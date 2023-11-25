@@ -26,7 +26,6 @@ from web_agent_site.utils import (
 
 TEMPLATE_DIR = os.path.join(BASE_DIR, 'templates')
 
-SEARCH_RETURN_N = 6
 PRODUCT_WINDOW = 3
 TOP_K_ATTR = 10
 DEFAULT_PRICE = 100.0
@@ -156,12 +155,13 @@ def get_top_n_product_from_keywords(
         search_engine,
         all_products,
         product_item_dict,
+        return_n: int = 5,
         attribute_to_asins=None,
         n_random: int = None,
         shuffle: bool = False
     ):
     if keywords[0] == '<r>':
-        top_n_products = random.sample(all_products, k=SEARCH_RETURN_N)
+        top_n_products = random.sample(all_products, k=return_n)
     elif keywords[0] == '<a>':
         attribute = ' '.join(keywords[1:]).strip()
         asins = attribute_to_asins[attribute]
@@ -174,7 +174,7 @@ def get_top_n_product_from_keywords(
         top_n_products = [p for p in all_products if p['query'] == query]
     else:
         keywords = ' '.join(keywords)
-        hits = search_engine.search(keywords, k=SEARCH_RETURN_N)
+        hits = search_engine.search(keywords, k=return_n)
         docs = [search_engine.doc(hit.docid) for hit in hits]
         top_n_asins = [json.loads(doc.raw())['id'] for doc in docs]
         top_n_products = [product_item_dict[asin] for asin in top_n_asins if asin in product_item_dict]

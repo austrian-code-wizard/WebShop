@@ -22,7 +22,17 @@ class WebAgentDreamDOMEnv(gym.Env):
 
     """Gym environment for HTML mode of WebShop environment"""
 
-    def __init__(self, observation_mode='html', window_height: int = 540, window_width: int = 960, scroll_amount: int = 180, scroll_time: int = 150, **kwargs):
+    def __init__(
+        self,
+        observation_mode: str = 'html',
+        window_height: int = 540,
+        window_width: int = 960,
+        scroll_amount: int = 180,
+        scroll_time: int = 150,
+        return_n: int = 3,
+        num_random: int = 0,
+        **kwargs
+    ):
         """
         Constructor for HTML environment
 
@@ -39,17 +49,42 @@ class WebAgentDreamDOMEnv(gym.Env):
         self.kwargs = kwargs
         self.WINDOW_HEIGHT = window_height
         self.WINDOW_WIDTH = window_width
+        self.return_n = return_n
+        self.num_random = num_random
         
         self._cur_state = None
         self.page_source = None
 
-        self.observation_space = gym.spaces.Text(min_length=0, max_length=100000, charset=ascii_letters + digits + punctuation)
+        self.observation_space = gym.spaces.Text(
+            min_length=0,
+            max_length=100000,
+            charset=ascii_letters + digits + punctuation
+        )
 
     def clean_url(self, url: str) -> str:
         """Make a url nicely readable by adding ellipses in long segments"""
         parts = url.split('/')
         parts = [p[:10] + '...' + p[-10:] if len(p) > 20 else p for p in parts]
         return '/'.join(parts)
+    
+    def add_query_parameters(self, url_string: str) -> str:
+        """
+        Adds query parameters 'return_n' and 'num_random' to the given URL string
+
+        Arguments:
+        url_string (str): The URL string to add query parameters to
+        return_n (int): The value of the 'return_n' query parameter
+        num_random (int): The value of the 'num_random' query parameter
+
+        Returns:
+        str: The modified URL string with the added query parameters
+        """
+        if '?' in url_string:
+            url_string += '&'
+        else:
+            url_string += '?'
+        url_string += f'return_n={self.return_n}&num_random={self.num_random}'
+        return url_string
 
     def step(self, action: int):
         """
@@ -160,7 +195,8 @@ class WebAgentDreamDOMEnv(gym.Env):
             self.session = ''.join(random.choices(string.ascii_lowercase, k=5))
         
         with app.test_client() as c:
-            self.page_source = c.get(f'/{self.session}').data.decode('utf-8')
+            url = self.add_query_parameters(f'/{self.session}')
+            self.page_source = c.get(url).data.decode('utf-8')
             self._cur_state = self.clean_url(f'/{self.session}')
 
         self.instruction_text = self.get_instruction_text()

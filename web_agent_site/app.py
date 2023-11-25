@@ -42,7 +42,8 @@ attribute_to_asins = None
 goals = None
 weights = None
 
-NUM_RANDOM = 0
+NUM_RANDOM = 2
+SEARCH_RETURN_N = 1
 
 user_sessions = dict()
 user_log_dir = None
@@ -55,6 +56,12 @@ def home():
 @app.route('/<session_id>', methods=['GET', 'POST'])
 def index(session_id):
     global user_log_dir
+
+    return_n = int(request.args.get('return_n')) if request.args.get('return_n') else SEARCH_RETURN_N
+    num_random = int(request.args.get('num_random')) if request.args.get('num_random') else NUM_RANDOM
+
+    # Your code here
+
     global all_products, product_item_dict, \
            product_prices, attribute_to_asins, \
            search_engine, \
@@ -98,8 +105,9 @@ def index(session_id):
             search_engine,
             all_products,
             product_item_dict,
-            attribute_to_asins,
-            n_random=NUM_RANDOM,
+            return_n=return_n,
+            attribute_to_asins=attribute_to_asins,
+            n_random=num_random,
             shuffle=True
         )
         user_sessions[session_id]["top_n_products"][search_query] = top_n_products
@@ -135,8 +143,8 @@ def index(session_id):
     methods=['GET', 'POST']
 )
 def search_results(session_id, keywords, page):
-    """page = convert_web_app_string_to_var('page', page)
-    keywords = convert_web_app_string_to_var('keywords', keywords)
+    page = convert_web_app_string_to_var('page', page)
+    """keywords = convert_web_app_string_to_var('keywords', keywords)
     keyword_string = " ".join(keywords)"""
     keyword_string = user_sessions[session_id]['goal']['llm_query']
     if keyword_string in user_sessions[session_id]["top_n_products"]:
@@ -158,7 +166,7 @@ def search_results(session_id, keywords, page):
         'search',
         session_id=session_id,
         products=products,
-        keywords=keywords,
+        keywords=keyword_string.split(),
         page=page,
         total=len(top_n_products),
         instruction_text=user_sessions[session_id]['goal']['instruction_text']
@@ -169,7 +177,7 @@ def search_results(session_id, keywords, page):
         url=request.url,
         goal=user_sessions[session_id]['goal'],
         content=dict(
-            keywords=keywords,
+            keywords=keyword_string.split(),
             search_result_asins=[p['asin'] for p in products],
             page=page,
         )
