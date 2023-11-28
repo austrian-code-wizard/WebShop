@@ -8,12 +8,11 @@ from collections import defaultdict
 from ast import literal_eval
 from decimal import Decimal
 
-import cleantext
+import numpy as np
 from tqdm import tqdm
-from rank_bm25 import BM25Okapi
 from flask import render_template_string
 from rich import print
-from pyserini.search.lucene import LuceneSearcher
+# from pyserini.search.lucene import LuceneSearcher
 
 from web_agent_site.utils import (
     BASE_DIR,
@@ -186,6 +185,32 @@ def get_top_n_product_from_keywords(
     # Add ability to shuffle items
     if shuffle:
         random.shuffle(top_n_products)
+    return top_n_products
+
+
+def get_top_n_product_from_cache(
+        goal,
+        all_products,
+        product_item_dict,
+        return_n: int = 5,
+        n_random: int = None,
+        shuffle: bool = False,
+        seed: int = None):
+    
+    assert goal.get('result_asins') is not None, 'Goal does not have result_asins.'
+    # Get random state
+    random_state = np.random.RandomState(seed)
+
+    top_n_asins = goal["result_asins"][:return_n]
+    top_n_products = [product_item_dict[asin] for asin in top_n_asins if asin in product_item_dict]
+
+    # Add ability to add non-relevant items
+    if n_random:
+        top_n_products += random_state.choice(all_products, size=n_random, replace=False).tolist()
+
+    # Add ability to shuffle items
+    if shuffle:
+        random_state.shuffle(top_n_products)
     return top_n_products
 
 

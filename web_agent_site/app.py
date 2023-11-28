@@ -19,6 +19,7 @@ from web_agent_site.engine.engine import (
     init_search_engine,
     convert_web_app_string_to_var,
     get_top_n_product_from_keywords,
+    get_top_n_product_from_cache,
     get_product_per_page,
     map_action_to_html,
     END_BUTTON
@@ -44,6 +45,7 @@ weights = None
 
 NUM_RANDOM = 2
 SEARCH_RETURN_N = 1
+SEED = 0
 
 user_sessions = dict()
 user_log_dir = None
@@ -59,6 +61,9 @@ def index(session_id):
 
     return_n = int(request.args.get('return_n')) if request.args.get('return_n') else SEARCH_RETURN_N
     num_random = int(request.args.get('num_random')) if request.args.get('num_random') else NUM_RANDOM
+    seed = int(request.args.get('seed')) if request.args.get('seed') and request.args.get('seed').isnumeric() else SEED
+    episode_start = int(request.args.get('episode_start')) if request.args.get('episode_start') else 0
+    shuffle_products = bool(int(request.args.get('shuffle_products'))) if request.args.get('shuffle_products') else True
 
     # Your code here
 
@@ -67,50 +72,47 @@ def index(session_id):
            search_engine, \
            goals, weights, user_sessions
 
-    if search_engine is None:
+    if all_products is None:
         all_products, product_item_dict, product_prices, attribute_to_asins = \
             load_products(
                 filepath=DEFAULT_FILE_PATH,
                 num_products=DEBUG_PROD_SIZE,
                 human_goals=False
             )
-        search_engine = init_search_engine(num_products=DEBUG_PROD_SIZE)
+        # search_engine = init_search_engine(num_products=DEBUG_PROD_SIZE)
         # goals = get_goals(all_products, product_prices, human_goals=False)
         goals = get_goals(None, None, from_path=SYNTHETIC_GOAL_PATH)
         print(f"Num goals: {len(goals)}")
-        random.seed(233)
+        random.seed(SEED)
         random.shuffle(goals)
         weights = [goal['weight'] for goal in goals]
 
     if session_id not in user_sessions and 'fixed' in session_id:
         goal_dix = int(session_id.split('_')[-1])
         goal = goals[goal_dix]
-        user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': {}}
+        user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': None}
         if user_log_dir is not None:
             setup_logger(session_id, user_log_dir)
     elif session_id not in user_sessions:
         goal = random.choices(goals, weights)[0]
-        user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': {}}
+        user_sessions[session_id] = {'goal': goal, 'done': False, 'top_n_products': None}
         if user_log_dir is not None:
             setup_logger(session_id, user_log_dir)
 
-    search_query = user_sessions[session_id]['goal']['llm_query']
-    if search_query in user_sessions[session_id]["top_n_products"]:
-        top_n_products = user_sessions[session_id]["top_n_products"][search_query]
-        random.shuffle(top_n_products)
+    if not episode_start:
+        top_n_products = user_sessions[session_id]["top_n_products"]
     else:
         # print(f"Warning: could not find cached search results for {instruction_text}")
-        top_n_products = get_top_n_product_from_keywords(
-            search_query.split(),
-            search_engine,
+        top_n_products = get_top_n_product_from_cache(
+            user_sessions[session_id]["goal"],
             all_products,
             product_item_dict,
             return_n=return_n,
-            attribute_to_asins=attribute_to_asins,
             n_random=num_random,
-            shuffle=True
+            shuffle=shuffle_products,
+            seed=seed
         )
-        user_sessions[session_id]["top_n_products"][search_query] = top_n_products
+        user_sessions[session_id]["top_n_products"] = top_n_products
 
     best_products = get_top_product_matches(top_n_products, product_prices, user_sessions[session_id]["goal"])
     
@@ -147,7 +149,8 @@ def search_results(session_id, keywords, page):
     """keywords = convert_web_app_string_to_var('keywords', keywords)
     keyword_string = " ".join(keywords)"""
     keyword_string = user_sessions[session_id]['goal']['llm_query']
-    if keyword_string in user_sessions[session_id]["top_n_products"]:
+    top_n_products = user_sessions[session_id]["top_n_products"]
+    """if keyword_string in user_sessions[session_id]["top_n_products"]:
         top_n_products = user_sessions[session_id]["top_n_products"][keyword_string]
     else:
         print(f"Warning: could not find cached search results for {keyword_string}")
@@ -160,7 +163,7 @@ def search_results(session_id, keywords, page):
             n_random=NUM_RANDOM,
             shuffle=True
         )
-        user_sessions[session_id]["top_n_products"][keyword_string] = top_n_products
+        user_sessions[session_id]["top_n_products"][keyword_string] = top_n_products"""
     products = get_product_per_page(top_n_products, page)
     html = map_action_to_html(
         'search',

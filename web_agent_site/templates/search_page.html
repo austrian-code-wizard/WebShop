@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='style_response.css')}}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
     <link rel="icon" href="data:,">
@@ -14,7 +14,7 @@
           <div id="logo" class="text-center">
             <h2>WebShop</h2>
           </div>
-          <div id="instruction-text" class="text-center">
+          <div id="instruction-text" style="display: none;" class="text-center">
             <h4>{{ instruction_text }}</h4>
           </div>
           <div id="best-products" style="display: none;" class="text-center">

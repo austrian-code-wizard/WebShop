@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+    <link rel="stylesheet" href="{{url_for('static', filename='style_response.css')}}">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.0.3/css/font-awesome.css	">
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
@@ -12,7 +12,7 @@
     <div class="container py-5">
       <div class="row top-buffer">
         <div class="col-sm-6">
-          <div id="instruction-text" class="text-center">
+          <div id="instruction-text" style="display: none;" class="text-center">
             <h4>{{ instruction_text }}</h4>
           </div>
         </div>

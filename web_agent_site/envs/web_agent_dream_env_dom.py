@@ -1,11 +1,16 @@
-import gym
 import random
 import requests
 import string
 import re
+import os
 import json
 import html
+import time
+import logging
+import multiprocessing
 from urllib.parse import unquote, quote
+from os.path import join, dirname, abspath
+from selenium.webdriver import Chrome, ChromeOptions
 
 import gymnasium as gym
 from bs4 import BeautifulSoup
@@ -18,9 +23,21 @@ SEARCH_STATE = 0
 FILLED_SEARCH_STATE = 1
 RESULTS_STATE = 2
 
+
+def start_app(port:int = 3000, debug:bool = False, host:str = "localhost"):
+    app.run(port=port, debug=debug, host=host)
+
+
 class WebAgentDreamDOMEnv(gym.Env):
 
     """Gym environment for HTML mode of WebShop environment"""
+
+    _browser = None
+    _app_process = None
+
+    APP_PORT = random.randint(5000, 8000)
+    APP_HOST = "0.0.0.0"
+    TIMEOUT = 0.05
 
     def __init__(
         self,
@@ -31,6 +48,7 @@ class WebAgentDreamDOMEnv(gym.Env):
         scroll_time: int = 150,
         return_n: int = 3,
         num_random: int = 0,
+        shuffle_products: bool = False,
         **kwargs
     ):
         """
@@ -51,15 +69,50 @@ class WebAgentDreamDOMEnv(gym.Env):
         self.WINDOW_WIDTH = window_width
         self.return_n = return_n
         self.num_random = num_random
+        self.shuffle_products = shuffle_products
         
         self._cur_state = None
         self.page_source = None
+        self.first_step = True
 
         self.observation_space = gym.spaces.Text(
             min_length=0,
             max_length=100000,
             charset=ascii_letters + digits + punctuation
         )
+
+        if WebAgentDreamDOMEnv._app_process is None:
+            # We do not want to output api call logs
+            log = logging.getLogger('werkzeug')
+            log.setLevel(logging.ERROR)
+            WebAgentDreamDOMEnv._app_process = multiprocessing.Process(target=start_app, kwargs={'port': WebAgentDreamDOMEnv.APP_PORT, "debug": False, "host": WebAgentDreamDOMEnv.APP_HOST})
+            WebAgentDreamDOMEnv._app_process.start()
+            print(f"Started app subprocess on {self.APP_HOST}:{self.APP_PORT}")
+            time.sleep(1)
+
+        if WebAgentDreamDOMEnv._browser is None:
+            options = ChromeOptions()
+            options.add_argument(f"window-size={self.WINDOW_WIDTH},{self.WINDOW_HEIGHT}")
+            options.add_argument('force-device-scale-factor=0.07')
+            options.add_argument("headless")
+            options.add_argument("disable-gpu")
+            options.add_argument("no-sandbox")
+            cur_path = dirname(abspath(__file__))
+            # Find all files in cur_path prefixed with 'chromedriver'
+            binary_paths = [join(cur_path, f) for f in os.listdir(cur_path) if f.startswith('chromedriver')]
+
+            success = False
+            for binary_path in binary_paths:
+                try:
+                    WebAgentDreamDOMEnv._browser = Chrome(executable_path=binary_path, options=options)
+                    print("Started browser")
+                    time.sleep(1)
+                    success = True
+                except:
+                    pass
+            if not success:
+                raise Exception("Could not start browser")
+            
 
     def clean_url(self, url: str) -> str:
         """Make a url nicely readable by adding ellipses in long segments"""
@@ -84,6 +137,8 @@ class WebAgentDreamDOMEnv(gym.Env):
         else:
             url_string += '?'
         url_string += f'return_n={self.return_n}&num_random={self.num_random}'
+        url_string += f"&seed={self.seed}" if self.seed is not None else ''
+        url_string += f"&shuffle_products={int(self.shuffle_products)}" if self.shuffle_products is not None else ''
         return url_string
 
     def step(self, action: int):
@@ -99,16 +154,16 @@ class WebAgentDreamDOMEnv(gym.Env):
         reward = 0.0
         done = False
         info = None
+        self.first_step = False
 
         # Map action to executed command on the WebShop environment via the broswer driver
         urls = self.get_available_click_actions()
-        
         if action >= len(urls):
             pass
         else:
             with app.test_client() as c:
                 self.page_source = c.get(urls[action]).data.decode('utf-8')
-                self._cur_state = self.clean_url(urls[action])
+                self._cur_state = urls[action]
         return self.state, reward, done, info
     
     def get_available_click_actions(self):
@@ -187,17 +242,21 @@ class WebAgentDreamDOMEnv(gym.Env):
             # click_actions = [a.text for a in self.get_available_click_actions()]
         )
 
-    def reset(self, seed=None):
+    def reset(self, goal_id: int = None, seed: int = 0, is_test: bool = False):
         """Create a new session and reset environment variables"""
-        if seed is not None:
-            self.session = f"fixed_{seed}"
+        if goal_id is not None:
+            self.session = f"fixed_{goal_id}"
         else:
             self.session = ''.join(random.choices(string.ascii_lowercase, k=5))
+        self.seed = seed
+        self.is_test = is_test
+        self.first_step = True
         
         with app.test_client() as c:
-            url = self.add_query_parameters(f'/{self.session}')
+            url = self.add_query_parameters(f'http://localhost/{self.session}')
+            self._cur_state = url.replace(f'http://localhost', '')
+            url += "&episode_start=1"
             self.page_source = c.get(url).data.decode('utf-8')
-            self._cur_state = self.clean_url(f'/{self.session}')
 
         self.instruction_text = self.get_instruction_text()
         self.best_products = self.get_best_products()
@@ -208,26 +267,40 @@ class WebAgentDreamDOMEnv(gym.Env):
         # TODO: Render observation in terminal or WebShop website
         
         # Create a white PIL image and place the self._curstate url text on it, taking account of overflow
-        return self.screenshot
+        if self.is_test:
+            return self.screenshot
+        return self.fake_screenshot
 
-
-    def close(self):
+    @classmethod
+    def close(cls):
         # TODO: When DB used instead of JSONs, tear down DB here
-        pass
+        cls._browser.quit()
+        print(f"Quit driver successfully")
+        cls._app_process.terminate()
+        cls._app_process.kill()
+        cls._app_process.join()
+        cls._app_process = None
+        print(f"Quit flask")
 
     @property
-    def screenshot(self):
+    def fake_screenshot(self):
         img = Image.new('RGB', (self.WINDOW_WIDTH, self.WINDOW_HEIGHT), color = (255, 255, 255))
         fnt = ImageFont.truetype('arial.ttf', 12)
         d = ImageDraw.Draw(img)
-        d.text((10,10), self._cur_state, font=fnt, fill=(0,0,0))
-        """
-        # Now add page source in tiny font
-        fnt = ImageFont.truetype('arial.ttf', 10)
-        relevant_content = self.page_source.split("<body>")[1]
-        relevant_content = "\n".join(relevant_content.split("\n")[:30])
-        d.text((10,30), self.page_source.split("<body>")[1], font=fnt, fill=(0,0,0))"""
+        d.text((10,10), self.clean_url(self._cur_state), font=fnt, fill=(0,0,0))
         return img
+    
+    @property
+    def screenshot(self):
+        """Take screenshot of current browser window"""
+        url  = f'http://{self.APP_HOST}:{self.APP_PORT}' + self._cur_state
+        if self.first_step:
+            url += "&episode_start=1"
+        WebAgentDreamDOMEnv._browser.get(url)
+        time.sleep(WebAgentDreamDOMEnv.TIMEOUT)
+        self._browser.save_screenshot(f'.{self.APP_PORT}-tmp.png')
+        time.sleep(WebAgentDreamDOMEnv.TIMEOUT)
+        return Image.open(f'.{self.APP_PORT}-tmp.png')
 
 def tag_visible(element):
     """Helper method to strip HTML block of extraneous tags"""
